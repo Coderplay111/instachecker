@@ -125,37 +125,48 @@ async function downloadVideo() {
 
   let downloaded = false;
 
-  try {
-    // Fetch blob normally
-    const { blob } = await fetchBlobViaFetch(inputUrl);
-    const blobUrl = URL.createObjectURL(blob);
-    const filename = extractFileNameFromUrl(inputUrl);
+// Main click handler
+async function downloadVideo() {
+  const inputUrl = document.getElementById('url').value.trim();
+  setResult('<p class="msg">Fetching video info...</p>');
 
-    // Auto-download
-    createAndClickLink(blobUrl, filename);
-
-    setResult('<p class="msg">✅ Download started...</p>');
-    downloaded = true;
-  } catch (errFetch) {
-    console.warn('fetch->blob failed:', errFetch);
+  if (!inputUrl) {
+    setResult('<p class="msg error">Please paste an Instagram URL first.</p>');
+    return;
   }
 
-  // fallback: XHR method
-  if (!downloaded) {
-    try {
-      const blob = await fetchBlobViaXHR(inputUrl);
-      const blobUrl = URL.createObjectURL(blob);
-      const filename = extractFileNameFromUrl(inputUrl);
+  try {
+    // Step 1: Call RapidAPI to resolve Instagram URL → video file
+    const apiResponse = await fetch(`https://all-in-one-downloader6.p.rapidapi.com/?url=${encodeURIComponent(inputUrl)}`, {
+      method: "GET",
+      headers: {
+        "x-rapidapi-key": "db2704b9e4msh5f98d0d57ab9dacp19c03ejsn9bd899a1b326",
+        "x-rapidapi-host": "all-in-one-downloader6.p.rapidapi.com"
+      }
+    });
 
-      createAndClickLink(blobUrl, filename);
-      setResult('<p class="msg">✅ Download started (fallback)...</p>');
-    } catch (errXHR) {
-      console.error('Both fetch and XHR failed:', errXHR);
-      setResult('<p class="msg error">❌ Error fetching video info. Check console for details.</p>');
+    const data = await apiResponse.json();
+
+    if (!data || !data.url || !data.url[0]) {
+      throw new Error("No video found in API response");
     }
+
+    const fileUrl = data.url[0]; // direct mp4 link
+
+    // Step 2: Download as blob
+    const { blob } = await fetchBlobViaFetch(fileUrl);
+    const blobUrl = URL.createObjectURL(blob);
+    const filename = extractFileNameFromUrl(fileUrl);
+
+    // Step 3: Auto-download
+    createAndClickLink(blobUrl, filename);
+    setResult('<p class="msg">✅ Download started...</p>');
+
+  } catch (err) {
+    console.error("Download error:", err);
+    setResult('<p class="msg error">❌ Error fetching video info. Check console for details.</p>');
   }
 }
-
 
 
       // Call RapidAPI (same as your original)
