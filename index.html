@@ -113,16 +113,50 @@
       return { blob: res.data, headers: res.headers || {} };
     }
 
-    // Main click handler
-    async function downloadVideo() {
-      const inputUrl = document.getElementById('url').value.trim();
-      const resultDiv = document.getElementById('result');
-      setResult('<p class="msg">Fetching video info...</p>');
+// Main click handler
+async function downloadVideo() {
+  const inputUrl = document.getElementById('url').value.trim();
+  setResult('<p class="msg">Fetching video info...</p>');
 
-      if (!inputUrl) {
-        setResult('<p class="msg error">Please paste an Instagram URL first.</p>');
-        return;
-      }
+  if (!inputUrl) {
+    setResult('<p class="msg error">Please paste an Instagram URL first.</p>');
+    return;
+  }
+
+  let downloaded = false;
+
+  try {
+    // Fetch blob normally
+    const { blob } = await fetchBlobViaFetch(inputUrl);
+    const blobUrl = URL.createObjectURL(blob);
+    const filename = extractFileNameFromUrl(inputUrl);
+
+    // Auto-download
+    createAndClickLink(blobUrl, filename);
+
+    setResult('<p class="msg">✅ Download started...</p>');
+    downloaded = true;
+  } catch (errFetch) {
+    console.warn('fetch->blob failed:', errFetch);
+  }
+
+  // fallback: XHR method
+  if (!downloaded) {
+    try {
+      const blob = await fetchBlobViaXHR(inputUrl);
+      const blobUrl = URL.createObjectURL(blob);
+      const filename = extractFileNameFromUrl(inputUrl);
+
+      createAndClickLink(blobUrl, filename);
+      setResult('<p class="msg">✅ Download started (fallback)...</p>');
+    } catch (errXHR) {
+      console.error('Both fetch and XHR failed:', errXHR);
+      setResult('<p class="msg error">❌ Error fetching video info. Check console for details.</p>');
+    }
+  }
+}
+
+
 
       // Call RapidAPI (same as your original)
       const options = {
