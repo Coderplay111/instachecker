@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8"/>
+  <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Instagram Video Downloader</title>
   <style>
@@ -206,24 +206,31 @@
         resultDiv.innerHTML = `<div>${previewHtml}</div>`;
 
         // Try to fetch as blob and force-download
-let downloaded = false;
-let filename = extractFileNameFromUrl(fileUrl);
+        let downloaded = false;
+        let filename = extractFileNameFromUrl(fileUrl);
 
-try {
-  // primary: fetch() -> blob
-  const { blob } = await fetchBlobViaFetch(fileUrl);
-  const blobUrl = URL.createObjectURL(blob);
+        try {
+          // primary: fetch() -> blob
+          const { blob } = await fetchBlobViaFetch(fileUrl);
+          const blobUrl = URL.createObjectURL(blob);
+          // also show video element on page (same UI)
+          if (/\.(mp4|webm)/i.test(fileUrl)) {
+            resultDiv.innerHTML = `
+              <video controls src="${blobUrl}"></video>
+              <br/>
+              <a href="${blobUrl}" download="${filename}">Download MP4</a>
+              <div class="msg">✅ Automatic download will start now.</div>
+            `;
+          } else {
+            resultDiv.innerHTML = `<a href="${blobUrl}" download="${filename}">Download File</a><div class="msg">✅ Automatic download will start now.</div>`;
+          }
+          // auto-trigger download
+          createAndClickLink(blobUrl, filename);
+          downloaded = true;
+        } catch (errFetch) {
+          console.warn('fetch->blob failed:', errFetch);
+        }
 
-  // just show a tiny status message
-  setResult('<div class="msg">✅ Your download will start automatically...</div>');
-
-  // auto-trigger download (silent)
-  createAndClickLink(blobUrl, filename);
-
-  downloaded = true;
-} catch (errFetch) {
-  console.warn('fetch->blob failed:', errFetch);
-}
         if (!downloaded) {
           // try axios blob (may still fail because of CORS)
           try {
