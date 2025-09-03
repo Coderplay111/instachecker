@@ -1,1 +1,273 @@
-<!DOCTYPE html> <html lang="en"> <head> <meta charset="UTF-8"/> <meta name="viewport" content="width=device-width, initial-scale=1.0"/> <title>Instagram Video Downloader</title> <style> body { font-family: Arial, sans-serif; background: #fafafa; display: flex; flex-direction: column; align-items: center; justify-content: start; padding: 20px; } h1 { color: #e1306c; } input { width: 80%; max-width: 500px; padding: 10px; font-size: 16px; margin-bottom: 15px; border: 1px solid #ccc; border-radius: 8px; } button { background: #e1306c; color: white; border: none; padding: 10px 20px; font-size: 16px; border-radius: 8px; cursor: pointer; } button:hover { background: #c72a5a; } #result { margin-top: 20px; text-align: center; } video { max-width: 100%; margin-top: 15px; border-radius: 8px; } a { display: inline-block; margin-top: 10px; text-decoration: none; background: #28a745; color: #fff; padding: 10px 15px; border-radius: 6px; } .msg { margin-top:10px; color:#333; font-size:14px; } .error { color:#b00020; } </style> </head> <body> <h1>Instagram Video Downloader</h1> <input type="text" id="url" placeholder="Paste Instagram link here..." /> <button onclick="downloadVideo()">Download</button> <div id="result"></div> <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script> <script> // === CONFIG (your RapidAPI values) === const RAPIDAPI_KEY = 'db2704b9e4msh5f98d0d57ab9dacp19c03ejsn9bd899a1b326'; const RAPIDAPI_HOST = 'all-in-one-downloader6.p.rapidapi.com'; const RAPIDAPI_URL = 'https://all-in-one-downloader6.p.rapidapi.com/'; // === Helpers === function setResult(html) { document.getElementById('result').innerHTML = html; } function createAndClickLink(href, filename) { const a = document.createElement('a'); a.href = href; if (filename) a.download = filename; // for safety, open in same tab if it's a blob URL document.body.appendChild(a); a.click(); a.remove(); } function extractFileNameFromUrl(u) { try { const pathname = new URL(u).pathname; const name = pathname.split('/').pop() || 'video.mp4'; return name.split('?')[0]; } catch (e) { return 'video.mp4'; } } // Try fetching file via fetch() and turning into blob async function fetchBlobViaFetch(fileUrl) { const resp = await fetch(fileUrl, { mode: 'cors' }); if (!resp.ok) throw new Error('Failed to fetch file: ' + resp.status); if (resp.type === 'opaque') throw new Error('Opaque response (CORS blocked).'); const blob = await resp.blob(); return { blob, headers: resp.headers }; } // Try axios fallback (may still fail with CORS) async function fetchBlobViaAxios(fileUrl) { const res = await axios.get(fileUrl, { responseType: 'blob' }); return { blob: res.data, headers: res.headers || {} }; } // Main click handler async function downloadVideo() { const inputUrl = document.getElementById('url').value.trim(); const resultDiv = document.getElementById('result'); setResult('<p class="msg">Fetching video info...</p>'); if (!inputUrl) { setResult('<p class="msg error">Please paste an Instagram URL first.</p>'); return; } // Call RapidAPI (same as your original) const options = { method: 'GET', url: RAPIDAPI_URL, params: { url: inputUrl }, headers: { 'x-rapidapi-key': RAPIDAPI_KEY, 'x-rapidapi-host': RAPIDAPI_HOST }, timeout: 20000 }; try { const response = await axios.request(options); console.log('API response:', response.data); // try common keys first, fallback to scan for any URL const data = response.data || {}; const downloadUrl = data.download_url || data.media || data.url || data.link || data.video || null; // If not found, scan object for first mp4/webm/mp3 link function findAnyUrl(obj) { if (!obj) return null; const seen = new Set(); const stack = [obj]; while (stack.length) { const cur = stack.pop(); if (!cur) continue; if (typeof cur === 'string') { if (/https?:\/\/[^\s'"]+/.test(cur) && /\.(mp4|m3u8|webm|mp3)/i.test(cur)) return cur; continue; } if (Array.isArray(cur)) { for (let i = 0; i < cur.length; i++) stack.push(cur[i]); continue; } if (typeof cur === 'object') { for (const k in cur) { const val = cur[k]; if (typeof val === 'string' && /https?:\/\/[^\s'"]+/.test(val) && /\.(mp4|m3u8|webm|mp3)/i.test(val)) return val; if (typeof val === 'object') stack.push(val); } } } // last resort: pick any URL-ish string function findAnyUrlString(o) { if (!o) return null; const s = JSON.stringify(o); const m = s.match(/https?:\/\/[^\s'"]{20,}/); return m ? m[0] : null; } return findAnyUrlString(obj); } let fileUrl = downloadUrl || findAnyUrl(data); if (!fileUrl) { setResult('<p class="msg error">No downloadable media URL found in the API response. Check console for full response.</p>'); console.log('Full API response:', response.data); return; } // show a preview if possible (keep UI same) let previewHtml = ''; if (/\.(jpe?g|png|webp)/i.test(fileUrl) === false && /\.(mp4|webm)/i.test(fileUrl)) { // try to find a thumbnail in response (optional) const thumb = data.thumb || data.thumbnail || data.preview || (function findThumb(obj){ if (!obj) return null; const json = JSON.stringify(obj); const m = json.match(/https?:\/\/[^\s'"]+\.(jpe?g|png|webp)/i); return m ? m[0] : null; })(data); previewHtml = ${thumb ? <img src="${thumb}" alt="thumb" style="max-width:160px;border-radius:6px;margin-bottom:10px;"> : ''} <div style="word-break:break-all"><small>${fileUrl}</small></div> <div class="msg">Attempting automatic download (no extra clicks)...</div> ; } resultDiv.innerHTML = <div>${previewHtml}</div>; // Try to fetch as blob and force-download let downloaded = false; let filename = extractFileNameFromUrl(fileUrl); try { // primary: fetch() -> blob const { blob } = await fetchBlobViaFetch(fileUrl); const blobUrl = URL.createObjectURL(blob); // also show video element on page (same UI) if (/\.(mp4|webm)/i.test(fileUrl)) { resultDiv.innerHTML = <video controls src="${blobUrl}"></video> <br/> <a href="${blobUrl}" download="${filename}">Download MP4</a> <div class="msg">✅ Automatic download will start now.</div> ; } else { resultDiv.innerHTML = <a href="${blobUrl}" download="${filename}">Download File</a><div class="msg">✅ Automatic download will start now.</div>; } // auto-trigger download createAndClickLink(blobUrl, filename); downloaded = true; } catch (errFetch) { console.warn('fetch->blob failed:', errFetch); } if (!downloaded) { // try axios blob (may still fail because of CORS) try { const { blob } = await fetchBlobViaAxios(fileUrl); const blobUrl = URL.createObjectURL(blob); if (/\.(mp4|webm)/i.test(fileUrl)) { resultDiv.innerHTML = <video controls src="${blobUrl}"></video> <br/> <a href="${blobUrl}" download="${filename}">Download MP4</a> <div class="msg">✅ Automatic download will start now.</div> ; } else { resultDiv.innerHTML = <a href="${blobUrl}" download="${filename}">Download File</a><div class="msg">✅ Automatic download will start now.</div>; } createAndClickLink(blobUrl, filename); downloaded = true; } catch (errAxios) { console.warn('axios->blob failed:', errAxios); } } if (!downloaded) { // fallback: show direct link so user can right-click > Save as (CORS prevented blob download) resultDiv.innerHTML = <video controls src="${fileUrl}"></video> <br/> <a href="${fileUrl}" target="_blank" rel="noopener" class="">Open direct link (then Save As)</a> <div class="msg error">Automatic download blocked by CORS. If you want fully automatic downloads, use a proxy/server-side fetch (see logs).</div> ; } } catch (err) { console.error('Error fetching from RapidAPI', err); setResult('<p class="msg error">Error fetching video info. Check console for details.</p>'); } } </script> </body> </html>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Instagram Video Downloader</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #fafafa;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: start;
+      padding: 20px;
+    }
+    h1 {
+      color: #e1306c;
+    }
+    input {
+      width: 80%;
+      max-width: 500px;
+      padding: 10px;
+      font-size: 16px;
+      margin-bottom: 15px;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+    }
+    button {
+      background: #e1306c;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      font-size: 16px;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+    button:hover {
+      background: #c72a5a;
+    }
+    #result {
+      margin-top: 20px;
+      text-align: center;
+    }
+    video {
+      max-width: 100%;
+      margin-top: 15px;
+      border-radius: 8px;
+    }
+    a {
+      display: inline-block;
+      margin-top: 10px;
+      text-decoration: none;
+      background: #28a745;
+      color: #fff;
+      padding: 10px 15px;
+      border-radius: 6px;
+    }
+    .msg { margin-top:10px; color:#333; font-size:14px; }
+    .error { color:#b00020; }
+  </style>
+</head>
+<body>
+  <h1>Instagram Video Downloader</h1>
+  <input type="text" id="url" placeholder="Paste Instagram link here..." />
+  <button onclick="downloadVideo()">Download</button>
+  <div id="result"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+  <script>
+    // === CONFIG (your RapidAPI values) ===
+    const RAPIDAPI_KEY = 'db2704b9e4msh5f98d0d57ab9dacp19c03ejsn9bd899a1b326';
+    const RAPIDAPI_HOST = 'all-in-one-downloader6.p.rapidapi.com';
+    const RAPIDAPI_URL = 'https://all-in-one-downloader6.p.rapidapi.com/';
+
+    // === Helpers ===
+    function setResult(html) {
+      document.getElementById('result').innerHTML = html;
+    }
+
+    function createAndClickLink(href, filename) {
+      const a = document.createElement('a');
+      a.href = href;
+      if (filename) a.download = filename;
+      // for safety, open in same tab if it's a blob URL
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    }
+
+    function extractFileNameFromUrl(u) {
+      try {
+        const pathname = new URL(u).pathname;
+        const name = pathname.split('/').pop() || 'video.mp4';
+        return name.split('?')[0];
+      } catch (e) {
+        return 'video.mp4';
+      }
+    }
+
+    // Try fetching file via fetch() and turning into blob
+    async function fetchBlobViaFetch(fileUrl) {
+      const resp = await fetch(fileUrl, { mode: 'cors' });
+      if (!resp.ok) throw new Error('Failed to fetch file: ' + resp.status);
+      if (resp.type === 'opaque') throw new Error('Opaque response (CORS blocked).');
+      const blob = await resp.blob();
+      return { blob, headers: resp.headers };
+    }
+
+    // Try axios fallback (may still fail with CORS)
+    async function fetchBlobViaAxios(fileUrl) {
+      const res = await axios.get(fileUrl, { responseType: 'blob' });
+      return { blob: res.data, headers: res.headers || {} };
+    }
+
+    // Main click handler
+    async function downloadVideo() {
+      const inputUrl = document.getElementById('url').value.trim();
+      const resultDiv = document.getElementById('result');
+      setResult('<p class="msg">Fetching video info...</p>');
+
+      if (!inputUrl) {
+        setResult('<p class="msg error">Please paste an Instagram URL first.</p>');
+        return;
+      }
+
+      // Call RapidAPI (same as your original)
+      const options = {
+        method: 'GET',
+        url: RAPIDAPI_URL,
+        params: { url: inputUrl },
+        headers: {
+          'x-rapidapi-key': RAPIDAPI_KEY,
+          'x-rapidapi-host': RAPIDAPI_HOST
+        },
+        timeout: 20000
+      };
+
+      try {
+        const response = await axios.request(options);
+        console.log('API response:', response.data);
+
+        // try common keys first, fallback to scan for any URL
+        const data = response.data || {};
+        const downloadUrl = data.download_url || data.media || data.url || data.link || data.video || null;
+
+        // If not found, scan object for first mp4/webm/mp3 link
+        function findAnyUrl(obj) {
+          if (!obj) return null;
+          const seen = new Set();
+          const stack = [obj];
+          while (stack.length) {
+            const cur = stack.pop();
+            if (!cur) continue;
+            if (typeof cur === 'string') {
+              if (/https?:\/\/[^\s'"]+/.test(cur) && /\.(mp4|m3u8|webm|mp3)/i.test(cur)) return cur;
+              continue;
+            }
+            if (Array.isArray(cur)) {
+              for (let i = 0; i < cur.length; i++) stack.push(cur[i]);
+              continue;
+            }
+            if (typeof cur === 'object') {
+              for (const k in cur) {
+                const val = cur[k];
+                if (typeof val === 'string' && /https?:\/\/[^\s'"]+/.test(val) && /\.(mp4|m3u8|webm|mp3)/i.test(val)) return val;
+                if (typeof val === 'object') stack.push(val);
+              }
+            }
+          }
+          // last resort: pick any URL-ish string
+          function findAnyUrlString(o) {
+            if (!o) return null;
+            const s = JSON.stringify(o);
+            const m = s.match(/https?:\/\/[^\s'"]{20,}/);
+            return m ? m[0] : null;
+          }
+          return findAnyUrlString(obj);
+        }
+
+        let fileUrl = downloadUrl || findAnyUrl(data);
+
+        if (!fileUrl) {
+          setResult('<p class="msg error">No downloadable media URL found in the API response. Check console for full response.</p>');
+          console.log('Full API response:', response.data);
+          return;
+        }
+
+        // show a preview if possible (keep UI same)
+        let previewHtml = '';
+        if (/\.(jpe?g|png|webp)/i.test(fileUrl) === false && /\.(mp4|webm)/i.test(fileUrl)) {
+          // try to find a thumbnail in response (optional)
+          const thumb = data.thumb || data.thumbnail || data.preview || (function findThumb(obj){
+            if (!obj) return null;
+            const json = JSON.stringify(obj);
+            const m = json.match(/https?:\/\/[^\s'"]+\.(jpe?g|png|webp)/i);
+            return m ? m[0] : null;
+          })(data);
+          previewHtml = `
+            ${thumb ? `<img src="${thumb}" alt="thumb" style="max-width:160px;border-radius:6px;margin-bottom:10px;">` : ''}
+            <div style="word-break:break-all"><small>${fileUrl}</small></div>
+            <div class="msg">Attempting automatic download (no extra clicks)...</div>
+          `;
+        }
+
+        resultDiv.innerHTML = `<div>${previewHtml}</div>`;
+
+        // Try to fetch as blob and force-download
+        let downloaded = false;
+        let filename = extractFileNameFromUrl(fileUrl);
+
+        try {
+          // primary: fetch() -> blob
+          const { blob } = await fetchBlobViaFetch(fileUrl);
+          const blobUrl = URL.createObjectURL(blob);
+          // also show video element on page (same UI)
+          if (/\.(mp4|webm)/i.test(fileUrl)) {
+            resultDiv.innerHTML = `
+              <video controls src="${blobUrl}"></video>
+              <br/>
+              <a href="${blobUrl}" download="${filename}">Download MP4</a>
+              <div class="msg">✅ Automatic download will start now.</div>
+            `;
+          } else {
+            resultDiv.innerHTML = `<a href="${blobUrl}" download="${filename}">Download File</a><div class="msg">✅ Automatic download will start now.</div>`;
+          }
+          // auto-trigger download
+          createAndClickLink(blobUrl, filename);
+          downloaded = true;
+        } catch (errFetch) {
+          console.warn('fetch->blob failed:', errFetch);
+        }
+
+        if (!downloaded) {
+          // try axios blob (may still fail because of CORS)
+          try {
+            const { blob } = await fetchBlobViaAxios(fileUrl);
+            const blobUrl = URL.createObjectURL(blob);
+            if (/\.(mp4|webm)/i.test(fileUrl)) {
+              resultDiv.innerHTML = `
+                <video controls src="${blobUrl}"></video>
+                <br/>
+                <a href="${blobUrl}" download="${filename}">Download MP4</a>
+                <div class="msg">✅ Automatic download will start now.</div>
+              `;
+            } else {
+              resultDiv.innerHTML = `<a href="${blobUrl}" download="${filename}">Download File</a><div class="msg">✅ Automatic download will start now.</div>`;
+            }
+            createAndClickLink(blobUrl, filename);
+            downloaded = true;
+          } catch (errAxios) {
+            console.warn('axios->blob failed:', errAxios);
+          }
+        }
+
+        if (!downloaded) {
+          // fallback: show direct link so user can right-click > Save as (CORS prevented blob download)
+          resultDiv.innerHTML = `
+            <video controls src="${fileUrl}"></video>
+            <br/>
+            <a href="${fileUrl}" target="_blank" rel="noopener" class="">Open direct link (then Save As)</a>
+            <div class="msg error">Automatic download blocked by CORS. If you want fully automatic downloads, use a proxy/server-side fetch (see logs).</div>
+          `;
+        }
+
+      } catch (err) {
+        console.error('Error fetching from RapidAPI', err);
+        setResult('<p class="msg error">Error fetching video info. Check console for details.</p>');
+      }
+    }
+  </script>
+</body>
+</html>
