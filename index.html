@@ -113,61 +113,16 @@
       return { blob: res.data, headers: res.headers || {} };
     }
 
-// Main click handler
-async function downloadVideo() {
-  const inputUrl = document.getElementById('url').value.trim();
-  setResult('<p class="msg">Fetching video info...</p>');
+    // Main click handler
+    async function downloadVideo() {
+      const inputUrl = document.getElementById('url').value.trim();
+      const resultDiv = document.getElementById('result');
+      setResult('<p class="msg">Fetching video info...</p>');
 
-  if (!inputUrl) {
-    setResult('<p class="msg error">Please paste an Instagram URL first.</p>');
-    return;
-  }
-
-  let downloaded = false;
-
-// Main click handler
-async function downloadVideo() {
-  const inputUrl = document.getElementById('url').value.trim();
-  setResult('<p class="msg">Fetching video info...</p>');
-
-  if (!inputUrl) {
-    setResult('<p class="msg error">Please paste an Instagram URL first.</p>');
-    return;
-  }
-
-  try {
-    // Step 1: Call RapidAPI to resolve Instagram URL → video file
-    const apiResponse = await fetch(`https://all-in-one-downloader6.p.rapidapi.com/?url=${encodeURIComponent(inputUrl)}`, {
-      method: "GET",
-      headers: {
-        "x-rapidapi-key": "db2704b9e4msh5f98d0d57ab9dacp19c03ejsn9bd899a1b326",
-        "x-rapidapi-host": "all-in-one-downloader6.p.rapidapi.com"
+      if (!inputUrl) {
+        setResult('<p class="msg error">Please paste an Instagram URL first.</p>');
+        return;
       }
-    });
-
-    const data = await apiResponse.json();
-
-    if (!data || !data.url || !data.url[0]) {
-      throw new Error("No video found in API response");
-    }
-
-    const fileUrl = data.url[0]; // direct mp4 link
-
-    // Step 2: Download as blob
-    const { blob } = await fetchBlobViaFetch(fileUrl);
-    const blobUrl = URL.createObjectURL(blob);
-    const filename = extractFileNameFromUrl(fileUrl);
-
-    // Step 3: Auto-download
-    createAndClickLink(blobUrl, filename);
-    setResult('<p class="msg">✅ Download started...</p>');
-
-  } catch (err) {
-    console.error("Download error:", err);
-    setResult('<p class="msg error">❌ Error fetching video info. Check console for details.</p>');
-  }
-}
-
 
       // Call RapidAPI (same as your original)
       const options = {
