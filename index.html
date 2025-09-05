@@ -1,160 +1,99 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Instagram Video Downloader</title>
+  <meta charset="UTF-8">
+  <title>Instagram Downloader</title>
+  <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      background: #fafafa;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: start;
-      padding: 20px;
-    }
-    h1 {
-      color: #e1306c;
-    }
-    input {
-      width: 80%;
-      max-width: 500px;
-      padding: 10px;
-      font-size: 16px;
-      margin-bottom: 15px;
-      border: 1px solid #ccc;
-      border-radius: 8px;
-    }
-    button {
-      background: #e1306c;
-      color: white;
-      border: none;
-      padding: 10px 20px;
-      font-size: 16px;
-      border-radius: 8px;
-      cursor: pointer;
-    }
-    button:hover {
-      background: #c72a5a;
-    }
-    #result {
-      margin-top: 20px;
-      text-align: center;
-    }
-    video {
-      max-width: 100%;
-      margin-top: 15px;
-      border-radius: 8px;
-    }
-    a {
-      display: inline-block;
-      margin-top: 10px;
-      text-decoration: none;
-      background: #28a745;
-      color: #fff;
-      padding: 10px 15px;
-      border-radius: 6px;
-    }
-    .msg { margin-top:10px; color:#333; font-size:14px; }
-    .error { color:#b00020; }
+    body { font-family: Arial, sans-serif; padding: 20px; text-align: center; }
+    input { width: 80%; padding: 10px; margin: 10px 0; }
+    button { margin: 5px; padding: 10px 20px; border: none; border-radius: 6px; cursor: pointer; }
+    .download-btn { background: #28a745; color: white; }
+    .preview { margin-top: 20px; }
+    video, img { max-width: 100%; border-radius: 10px; }
   </style>
 </head>
 <body>
-  <h1>Instagram Video Downloader</h1>
-  <input type="text" id="url" placeholder="Paste Instagram link here..." />
-  <button onclick="downloadVideo()">Download</button>
-  <div id="result"></div>
+  <h2>Instagram Video Downloader</h2>
+  <input type="text" id="instaUrl" placeholder="Paste Instagram link here" />
+  <br>
+  <button onclick="fetchInstagram()">Get Video</button>
 
-<script>
-  const RAPIDAPI_KEY = "db2704b9e4msh5f98d0d57ab9dacp19c03ejsn9bd899a1b326";
-  const RAPIDAPI_HOST = "instagram-downloader-download-instagram-stories-videos4.p.rapidapi.com";
-  const RAPIDAPI_URL = "https://instagram-downloader-download-instagram-stories-videos4.p.rapidapi.com/convert";
+  <div id="preview" class="preview"></div>
+  <div id="downloadBtns"></div>
 
-  function setResult(html) {
-    document.getElementById("result").innerHTML = html;
-  }
+  <script>
+    async function fetchInstagram() {
+      const urlInput = document.getElementById("instaUrl").value.trim();
+      const preview = document.getElementById("preview");
+      const downloadBtns = document.getElementById("downloadBtns");
 
-  function createAndClickLink(href, filename) {
-    const a = document.createElement("a");
-    a.href = href;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-  }
+      preview.innerHTML = "Fetching...";
+      downloadBtns.innerHTML = "";
 
-  function extractFileNameFromUrl(u) {
-    try {
-      const pathname = new URL(u).pathname;
-      const name = pathname.split("/").pop() || "video.mp4";
-      return name.split("?")[0];
-    } catch (e) {
-      return "video.mp4";
-    }
-  }
-
-  async function downloadVideo() {
-    const inputUrl = document.getElementById("url").value.trim();
-    setResult('<p class="msg">Fetching Instagram video...</p>');
-
-    if (!inputUrl) {
-      setResult('<p class="msg error">Please paste an Instagram URL first.</p>');
-      return;
-    }
-
-    const apiUrl = RAPIDAPI_URL + "?url=" + encodeURIComponent(inputUrl);
-
-    try {
-      const response = await fetch(apiUrl, {
+      const options = {
         method: "GET",
+        url: "https://instagram-downloader-download-instagram-stories-videos4.p.rapidapi.com/convert",
+        params: { url: urlInput },
         headers: {
-          "x-rapidapi-key": RAPIDAPI_KEY,
-          "x-rapidapi-host": RAPIDAPI_HOST,
-        },
-      });
-
-      const data = await response.json();
-      console.log("API response:", data);
-
-      // Check common fields returned by this API
-      const fileUrl =
-        data.media || data.video || data.url || data.link || data.download_url || null;
-
-      if (!fileUrl) {
-        setResult(
-          '<p class="msg error">No downloadable video found. Check console for API response.</p>'
-        );
-        return;
-      }
+          "x-rapidapi-key": "db2704b9e4msh5f98d0d57ab9dacp19c03ejsn9bd899a1b326",
+          "x-rapidapi-host": "instagram-downloader-download-instagram-stories-videos4.p.rapidapi.com"
+        }
+      };
 
       try {
-        // Fetch the video as blob
-        const resp = await fetch(fileUrl);
-        if (!resp.ok) throw new Error("Failed to fetch file");
-        const blob = await resp.blob();
-        const blobUrl = URL.createObjectURL(blob);
-        const filename = extractFileNameFromUrl(fileUrl);
+        const response = await axios.request(options);
+        console.log("API response:", response.data);
 
-        // Auto-trigger download
-        createAndClickLink(blobUrl, filename);
+        if (!response.data || !response.data.media) {
+          preview.innerHTML = "❌ No media found for this link.";
+          return;
+        }
 
-        // Tiny success message
-        setResult('<div class="msg">✅ Download started...</div>');
-      } catch (errFetch) {
-        console.warn("Direct fetch failed:", errFetch);
-        // Fallback: just give the direct link
-        setResult(
-          `<a href="${fileUrl}" target="_blank">Open direct link (Save As)</a>`
-        );
+        const mediaList = response.data.media;
+        const firstMedia = mediaList[0];
+
+        // Preview (video or image)
+        if (firstMedia.type === "video") {
+          preview.innerHTML = `
+            <video controls poster="${firstMedia.thumbnail}">
+              <source src="${firstMedia.url}" type="video/mp4">
+              Your browser does not support video.
+            </video>
+          `;
+        } else {
+          preview.innerHTML = `<img src="${firstMedia.url}" alt="Instagram media"/>`;
+        }
+
+        // Generate download buttons
+        mediaList.forEach(item => {
+          const btn = document.createElement("button");
+          btn.className = "download-btn";
+          btn.innerText = `Download ${item.quality || "Video"}`;
+          btn.onclick = () => handleDownload(item.url, item.quality);
+          downloadBtns.appendChild(btn);
+        });
+
+      } catch (error) {
+        console.error(error);
+        preview.innerHTML = "⚠️ Error fetching media.";
       }
-    } catch (err) {
-      console.error("Error fetching from Instagram API", err);
-      setResult(
-        '<p class="msg error">Error fetching video info. Check console for details.</p>'
-      );
     }
-  }
-</script>
+
+    async function handleDownload(url, quality) {
+      try {
+        const res = await axios.get(url, { responseType: "blob" });
+        const blobUrl = window.URL.createObjectURL(new Blob([res.data]));
+        const link = document.createElement("a");
+        link.href = blobUrl;
+        link.setAttribute("download", `instagram_${quality || "HD"}.mp4`);
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+      } catch (err) {
+        console.error("Download failed", err);
+      }
+    }
+  </script>
 </body>
 </html>
